@@ -54,7 +54,7 @@ void parsePermissions(struct stat statBuff, char* perm){
 	perm[8] = (statBuff.st_mode & S_IXOTH) ? 'x' : '-';
 }
 
-void listFolderContents(const char* dirPath, bool isRecursive, const char* nameEnd, const char* permissions, bool checkName, bool checkPerm)
+void listFolderContents(const char* dirPath, bool isRecursive, const char* nameEnd, const char* permissions, bool checkName, bool checkPerm, int depth)
 {
 	DIR *dir = opendir(dirPath);
 	struct dirent *entry = NULL;
@@ -66,6 +66,8 @@ void listFolderContents(const char* dirPath, bool isRecursive, const char* nameE
 		printf("ERROR\ninvalid directory path\n");
 		return;
 	}
+	else if(depth == 0)
+		printf("SUCCESS\n");
 	while((entry = readdir(dir)) != NULL){
 		if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
 		
@@ -84,7 +86,7 @@ void listFolderContents(const char* dirPath, bool isRecursive, const char* nameE
 		if(strcmp(fileName + (strlen(fileName) - strlen(nameEnd)), nameEnd) == 0 && strcmp(permissions, filePerm) == 0){
 			if(S_ISDIR(statBuff.st_mode))
 				if(isRecursive == true)
-					listFolderContents(fullPath, isRecursive, nameEnd, permissions, checkName, checkPerm);
+					listFolderContents(fullPath, isRecursive, nameEnd, permissions, checkName, checkPerm, depth + 1);
 			printf("%s\n", fullPath);
 		}
 	}
@@ -152,89 +154,128 @@ const char* readHeader(const char* dirPath, bool* success, headerInfoT* headerIn
 }
 
 void extractCommand(const char* path, int offset, int line, int size){
-	char cBuff;
-	int newLineCounter = 0;
 	int fd = -1;
+	char cBuff;
+	int nrOfLines = 0;
+	
 	fd = open(path, O_RDONLY);
 	
 	if(fd == -1){
-		printf("ERROR\ninvalid file");
+		printf("ERROR\ninvalid path\n");
 		return;
 	}
 	
+	printf("SUCCESS\n");
+	
 	lseek(fd, offset, SEEK_SET);
 	
-	int i = 0;
-	while(i < size){
+	int i;
+	for(i=0;i<size;i++){
 		read(fd, &cBuff, sizeof(char));
-		if(cBuff == '\n'){
-			newLineCounter++;
-			read(fd, &cBuff, sizeof(char));
-			i++;
-			printf("%c\n", cBuff);
-		}
-		i++;
+		if(cBuff == '\n')
+			nrOfLines++;
 	}
-	newLineCounter--;
-	printf("lineNR:%d, argv:%d\n", newLineCounter, line);
+	if(cBuff != '\n')
+		nrOfLines++;
 	
-	if(line > newLineCounter){
-		printf("ERROR\ninvalid line");
+	if(line > nrOfLines){
+		printf("ERROR\ninvalid line\n");
 		return;
 	}
-	
-	
-	
+
 	lseek(fd, offset, SEEK_SET);
+	
+	while(nrOfLines!=line){
+		read(fd, &cBuff, sizeof(char));
+		if(cBuff == '\n')
+			nrOfLines--;
+	}
+	
 	i=0;
-	while(newLineCounter != line){
-		read(fd, &cBuff, sizeof(char));
-		if(cBuff == '\r'){
-			read(fd, &cBuff, sizeof(char));
-			if(cBuff == '\n')
-				newLineCounter--;
-		}
-		i++;
-	}
-	
 	do{
 		read(fd, &cBuff, sizeof(char));
 		printf("%c", cBuff);
-		if(cBuff == '\r'){
-			read(fd, &cBuff, sizeof(char));
-			if(cBuff == '\n')
-				break;
-		}
 		i++;
-	}while(cBuff != '\n');
+	}while(cBuff != '\n' && i < size);
+	
+	//printf("%d\n", nrOfLines);
+	
+	close(fd);
+}
+
+void findAllCommand(const char* dirPath, int depth){
+	DIR *dir = opendir(dirPath);
+	struct dirent *entry = NULL;
+	char fullPath[512];
+	struct stat statBuff;
+	bool wasSuccess;
+	
+	if(dir == NULL){
+		printf("ERROR\ninvalid directory path\n");
+		return;
+	}
+	else if(depth == 0)
+		printf("SUCCESS\n");
+	
+	while((entry = readdir(dir)) != NULL){
+		if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+			
+		snprintf(fullPath, 512, "%s/%s", dirPath, entry->d_name);
+		
+		if(lstat(fullPath, &statBuff) != 0) continue;
+		
+		if(S_ISDIR(statBuff.st_mode))
+			findAllCommand(fullPath, depth + 1);
+		else{
+			headerInfoT* headerInfo = (headerInfoT*)malloc(sizeof(headerInfoT));
+		
+			readHeader(fullPath, &wasSuccess, headerInfo);
+			if(wasSuccess)
+				for(int i=0;i<headerInfo->noOfSections;i++)
+					if(headerInfo->sectHeaders[i].type == 72){
+						printf("%s\n", fullPath);
+						break;
+					}
+			free(headerInfo->sectHeaders);
+			free(headerInfo);
+		}
+	}
+	closedir(dir);
 }
 
 int main(int argc, char**argv)
 {
 	if(argc >= 2){
-		char* options = (char*)malloc(10 * sizeof(char));
-		strcpy(options, "0000000\0");
+		char* options = (char*)malloc(12 * sizeof(char));
+		strcpy(options, "00000000000\0");
 		parseOptions(argc, argv, options);
 		
-		if(options[0] == '1')
+		if(options[0] == '1'){
 			printf("34300\n");
+			goto jumpToEnd;
+		}
 		if(options[1] == '1'){
-			printf("SUCCESS\n");
-			if(options[7] != 0 && options[8] != 0)
-				listFolderContents(argv[options[6] - '0'] + 5, options[5] - '0', argv[options[7] - '0'] + 15, argv[options[8] - '0'] + 12, true, true);
-			if(options[7] != 0 && options[8] == 0)
-				listFolderContents(argv[options[6] - '0'] + 5, options[5] - '0', argv[options[7] - '0'] + 15, "", true, false);
-			if(options[7] == 0 && options[8] != 0)
-				listFolderContents(argv[options[6] - '0'] + 5, options[5] - '0', "", argv[options[8] - '0'] + 12, false, true);
-			if(options[7] == 0 && options[8] == 0)
-				listFolderContents(argv[options[6] - '0'] + 5, options[5] - '0', "", "", false, false);
+			if(options[7] != '0' && options[8] != '0')
+				listFolderContents(argv[options[6] - '0'] + 5, options[5] - '0', argv[options[7] - '0'] + 15, argv[options[8] - '0'] + 12, true, true, 0);
+			if(options[7] != '0' && options[8] == '0')
+				listFolderContents(argv[options[6] - '0'] + 5, options[5] - '0', argv[options[7] - '0'] + 15, "", true, false, 0);
+			if(options[7] == '0' && options[8] != '0')
+				listFolderContents(argv[options[6] - '0'] + 5, options[5] - '0', "", argv[options[8] - '0'] + 12, false, true, 0);
+			if(options[7] == '0' && options[8] == '0')
+				listFolderContents(argv[options[6] - '0'] + 5, options[5] - '0', "", "", false, false, 0);
+			goto jumpToEnd;
+		}
+		
+		if(options[4] == '1'){
+			findAllCommand(argv[options[6] - '0'] + 5, 0);
+			goto jumpToEnd;
 		}
 		
 		headerInfoT* header = (headerInfoT*)malloc(sizeof(headerInfoT));
 		bool wasSuccess;
-		
+			
 		const char* message = readHeader(argv[options[6] - '0'] + 5, &wasSuccess, header);
-		
 		if(options[2] == '1'){
 			if(wasSuccess){
 				printf("SUCCESS\nversion=%d\nnr_sections=%d\n", header->version, header->noOfSections);
@@ -245,17 +286,18 @@ int main(int argc, char**argv)
 			else{
 				printf("%s", message);
 			}
-			free(header->sectHeaders);
 		}
-		/*if(options[3] == '1'){
-			if(header->noOfSections < (options[9] - '0'))
+		if(options[3] == '1'){
+			if(header->noOfSections < atoi(argv[options[9] - '0'] + 8))
 				printf("ERROR\ninvalid section\n");
 			else
 				extractCommand(argv[options[6] - '0'] + 5, header->sectHeaders[atoi(argv[options[9] - '0'] + 8) - 1].offset, atoi(argv[options[10] - '0'] + 5), header->sectHeaders[atoi(argv[options[9] - '0'] + 8) - 1].size);
-		}*/
+		}
 		
 		free(header->sectHeaders);
-		free(header);	
+		free(header);
+			
+		jumpToEnd:
 		free(options);
 	}
 	return 0;
