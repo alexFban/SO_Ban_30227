@@ -52,6 +52,7 @@ void parsePermissions(struct stat statBuff, char* perm){
 	perm[6] = (statBuff.st_mode & S_IROTH) ? 'r' : '-';
 	perm[7] = (statBuff.st_mode & S_IWOTH) ? 'w' : '-';
 	perm[8] = (statBuff.st_mode & S_IXOTH) ? 'x' : '-';
+	perm[9]='\0';
 }
 
 void listFolderContents(const char* dirPath, bool isRecursive, const char* nameEnd, const char* permissions, bool checkName, bool checkPerm, int depth)
@@ -115,7 +116,6 @@ const char* readHeader(const char* dirPath, bool* success, headerInfoT* headerIn
 	fd = open(dirPath, O_RDONLY);
 	
 	if(fd == -1){
-		//printf("Error\nwrong path\n");
 		return "Error\nwrong path\n";
 	}
 	
@@ -123,26 +123,23 @@ const char* readHeader(const char* dirPath, bool* success, headerInfoT* headerIn
 	read(fd, &headerInfo->size, sizeof(short));
 	read(fd, &headerInfo->magic, 2 * sizeof(char));
 	if(strcmp(headerInfo->magic, "nd") != 0){
-		//printf("ERROR\nwrong magic\n");
 		return "ERROR\n wrong magic\n";
 	}
 	lseek(fd, -(headerInfo->size), SEEK_END);
 	read(fd, &headerInfo->version, sizeof(int));
 	if(headerInfo->version < 42 || headerInfo->version > 155){
-		//printf("ERROR\nwrong version\n");
 		return "ERROR\nwrong version\n";
 	}
 	read(fd, &headerInfo->noOfSections, sizeof(char));
 	if(headerInfo->noOfSections < 7 || headerInfo->noOfSections > 15){
-		//printf("ERROR\nwrong sect_nr\n");
 		return "ERROR\nwrong sect_nr\n";
 	}
 	headerInfo->sectHeaders = (sectionHeader*)malloc(headerInfo->noOfSections * sizeof(sectionHeader));
 	for(int i=0;i<headerInfo->noOfSections;i++){
 		read(fd, &headerInfo->sectHeaders[i].name, 18* sizeof(char));
+		headerInfo->sectHeaders[i].type = 0;
 		read(fd, &headerInfo->sectHeaders[i].type,  sizeof(char));
 		if(headerInfo->sectHeaders[i].type != 32 && headerInfo->sectHeaders[i].type != 86 && headerInfo->sectHeaders[i].type != 35 && headerInfo->sectHeaders[i].type != 72 && headerInfo->sectHeaders[i].type != 21 && headerInfo->sectHeaders[i].type != 67 && headerInfo->sectHeaders[i].type != 15){
-			//printf("ERROR\nwrong sect_types\n");
 			return "ERROR\nwrong sect_types\n";
 		}
 		read(fd, &headerInfo->sectHeaders[i].offset, sizeof(int));
@@ -198,8 +195,6 @@ void extractCommand(const char* path, int offset, int line, int size){
 		i++;
 	}while(cBuff != '\n' && i < size);
 	
-	//printf("%d\n", nrOfLines);
-	
 	close(fd);
 }
 
@@ -236,7 +231,8 @@ void findAllCommand(const char* dirPath, int depth){
 					if(headerInfo->sectHeaders[i].type == 72){
 						printf("%s\n", fullPath);
 						break;
-					}
+					}						
+					
 			free(headerInfo->sectHeaders);
 			free(headerInfo);
 		}
