@@ -1,3 +1,4 @@
+valgrind found
 Running tester for the first time.
 Generating tests cases (this may take a while)...
 Testing variant...[1;32mOK[0m
@@ -56,8 +57,8 @@ Testing extract_8...[1;32mOK[0m
 Testing extract_9...[1;32mOK[0m
 Testing extract_10...[1;32mOK[0m
 Testing extract_11...[1;32mOK[0m
-Testing extract_12...[1;31mFAIL[0m
-Testing findall_1...[1;31mFAIL[0m
+Testing extract_12...[1;32mOK[0m
+Testing findall_1...[1;32mOK[0m
 Testing findall_2...[1;32mOK[0m
 Testing findall_3...[1;32mOK[0m
 Testing findall_4...[1;32mOK[0m
@@ -65,5 +66,5 @@ Testing findall_5...[1;32mOK[0m
 Testing findall_6...[1;32mOK[0m
 Testing findall_7...[1;32mOK[0m
 Testing findall_8...[1;32mOK[0m
-Total score: 63 / 65
-Assignment grade: 96.92 / 100
+Total score: 65 / 65
+Assignment grade: 100.00 / 100

@@ -179,16 +179,18 @@ void extractCommand(const char* path, int offset, int line, int size){
 		printf("ERROR\ninvalid line\n");
 		return;
 	}
-
+	
 	lseek(fd, offset, SEEK_SET);
+	
+	i=0;
 	
 	while(nrOfLines!=line){
 		read(fd, &cBuff, sizeof(char));
+		i++;
 		if(cBuff == '\n')
 			nrOfLines--;
 	}
 	
-	i=0;
 	do{
 		read(fd, &cBuff, sizeof(char));
 		printf("%c", cBuff);
