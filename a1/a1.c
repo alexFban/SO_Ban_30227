@@ -135,6 +135,7 @@ const char* readHeader(const char* dirPath, bool* success, headerInfoT* headerIn
 		return "ERROR\nwrong sect_nr\n";
 	}
 	headerInfo->sectHeaders = (sectionHeader*)malloc(headerInfo->noOfSections * sizeof(sectionHeader));
+	*success = true;
 	for(int i=0;i<headerInfo->noOfSections;i++){
 		read(fd, &headerInfo->sectHeaders[i].name, 18* sizeof(char));
 		headerInfo->sectHeaders[i].type = 0;
@@ -145,7 +146,6 @@ const char* readHeader(const char* dirPath, bool* success, headerInfoT* headerIn
 		read(fd, &headerInfo->sectHeaders[i].offset, sizeof(int));
 		read(fd, &headerInfo->sectHeaders[i].size, sizeof(int));
 	}
-	*success = true;
 	close(fd);
 	return "";
 }
@@ -154,6 +154,9 @@ void extractCommand(const char* path, int offset, int line, int size){
 	int fd = -1;
 	char cBuff;
 	int nrOfLines = 0;
+	int pozEndOfLine[40];
+	int startOfLine[40];
+	startOfLine[0] = 0;
 	
 	fd = open(path, O_RDONLY);
 	
@@ -169,11 +172,16 @@ void extractCommand(const char* path, int offset, int line, int size){
 	int i;
 	for(i=0;i<size;i++){
 		read(fd, &cBuff, sizeof(char));
-		if(cBuff == '\n')
+		if(cBuff == '\n'){
+			pozEndOfLine[nrOfLines] = i;
 			nrOfLines++;
+			startOfLine[nrOfLines] = i + 1;
+		}
 	}
-	if(cBuff != '\n')
+	if(cBuff != '\n'){
+		pozEndOfLine[nrOfLines] = size;
 		nrOfLines++;
+	}
 	
 	if(line > nrOfLines){
 		printf("ERROR\ninvalid line\n");
@@ -184,18 +192,26 @@ void extractCommand(const char* path, int offset, int line, int size){
 	
 	i=0;
 	
+	/*
 	while(nrOfLines!=line){
 		read(fd, &cBuff, sizeof(char));
 		i++;
 		if(cBuff == '\n')
 			nrOfLines--;
 	}
-	
 	do{
 		read(fd, &cBuff, sizeof(char));
 		printf("%c", cBuff);
 		i++;
 	}while(cBuff != '\n' && i < size);
+	*/
+	lseek(fd, offset + startOfLine[nrOfLines - line], SEEK_SET);
+	char* content = (char*)malloc((pozEndOfLine[nrOfLines - line] - startOfLine[nrOfLines - line] + 1) * sizeof(char));
+	read(fd, content, (pozEndOfLine[nrOfLines - line] - startOfLine[nrOfLines - line] + 1) * sizeof(char));
+	content[pozEndOfLine[nrOfLines - line] - startOfLine[nrOfLines - line]] = '\0';
+	printf("%s\n", content);
+	
+	free(content);
 	
 	close(fd);
 }
@@ -226,16 +242,16 @@ void findAllCommand(const char* dirPath, int depth){
 			findAllCommand(fullPath, depth + 1);
 		else{
 			headerInfoT* headerInfo = (headerInfoT*)malloc(sizeof(headerInfoT));
-		
-			readHeader(fullPath, &wasSuccess, headerInfo);
-			if(wasSuccess)
+			
+			if(strcmp("", readHeader(fullPath, &wasSuccess, headerInfo)) == 0)
 				for(int i=0;i<headerInfo->noOfSections;i++)
 					if(headerInfo->sectHeaders[i].type == 72){
 						printf("%s\n", fullPath);
 						break;
 					}						
 					
-			free(headerInfo->sectHeaders);
+			if(wasSuccess)
+				free(headerInfo->sectHeaders);
 			free(headerInfo);
 		}
 	}
@@ -275,7 +291,7 @@ int main(int argc, char**argv)
 			
 		const char* message = readHeader(argv[options[6] - '0'] + 5, &wasSuccess, header);
 		if(options[2] == '1'){
-			if(wasSuccess){
+			if(strcmp("", message) == 0){
 				printf("SUCCESS\nversion=%d\nnr_sections=%d\n", header->version, header->noOfSections);
 				for(int i=0;i<header->noOfSections;i++){
 					printf("section%d: %s %d %d\n", i+1, header->sectHeaders[i].name, header->sectHeaders[i].type, header->sectHeaders[i].size);
@@ -285,6 +301,7 @@ int main(int argc, char**argv)
 				printf("%s", message);
 			}
 		}
+		
 		if(options[3] == '1'){
 			if(header->noOfSections < atoi(argv[options[9] - '0'] + 8))
 				printf("ERROR\ninvalid section\n");
@@ -292,7 +309,8 @@ int main(int argc, char**argv)
 				extractCommand(argv[options[6] - '0'] + 5, header->sectHeaders[atoi(argv[options[9] - '0'] + 8) - 1].offset, atoi(argv[options[10] - '0'] + 5), header->sectHeaders[atoi(argv[options[9] - '0'] + 8) - 1].size);
 		}
 		
-		free(header->sectHeaders);
+		if(wasSuccess)
+			free(header->sectHeaders);
 		free(header);
 			
 		jumpToEnd:
