@@ -2,9 +2,70 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <pthread.h>
 #include <fcntl.h>
 #include <semaphore.h>
 #include "a2_helper.h"
+
+typedef struct{
+	sem_t* sem1;
+	sem_t* sem2;
+	int id;
+}TH_STRUCT;
+
+sem_t* sem75 = NULL;
+sem_t* sem75_2 = NULL;
+
+void* process5Thread(void* unused){
+	TH_STRUCT* data = (TH_STRUCT*)unused;
+	
+	
+	if(4 == data->id){
+		sem_wait(data->sem2);
+	}
+
+	info(BEGIN, 5, data->id);
+	
+	if(3 == data->id){
+		sem_post(data->sem2);
+		sem_wait(data->sem1);
+	}
+	
+	info(END, 5, data->id);
+	
+	if(4 == data->id){
+		sem_post(data->sem1);
+	}
+	
+	if(1 == data->id){
+		sem_post(sem75_2);
+	}
+	
+	return NULL;
+}
+
+void* process2Thread(void* unused){
+	TH_STRUCT* data = (TH_STRUCT*)unused;
+	sem_wait(data->sem1);
+	info(BEGIN, 2, data->id);
+	info(END, 2, data->id);
+	sem_post(data->sem1);
+	return NULL;
+}
+
+void* process7Thread(void* unused){
+
+	if(4 == (int)(long)unused){
+		sem_wait(sem75_2);
+	}
+
+	info(BEGIN, 7, (int)(long)unused);									
+	info(END, 7, (int)(long)unused);
+	if(1 == (int)(long)unused){
+		sem_post(sem75);
+	}
+	return NULL;
+}
 
 int main(){
 	sem_t* semafor1 = sem_open("/a2SEM1", O_CREAT, 0644, 0);
@@ -16,6 +77,10 @@ int main(){
 	sem_t* semafor7 = sem_open("/a2SEM7", O_CREAT, 0644, 0);
 	sem_t* semafor8 = sem_open("/a2SEM8", O_CREAT, 0644, 0);
 	sem_t* semafor9 = sem_open("/a2SEM9", O_CREAT, 0644, 0);
+	
+	sem75 = sem_open("/a2SEM75", O_CREAT, 0644, 0);
+	sem75_2 = sem_open("/a2SEM75_2", O_CREAT, 0644, 0);
+	
 	init();
 
 	info(BEGIN, 1, 0);
@@ -27,14 +92,52 @@ int main(){
 		else{
 		    	info(BEGIN, 2, 0);
 		    	sem_post(semafor2);
+		    	
+		    	TH_STRUCT paramsP2[47];
+		    	
+		    	pthread_t p2tid[47];
+		    	
+		    	sem_t p2sem;
+		    	sem_init(&p2sem, 0, 4);
+		    	for(int i=0;i<47;i++){
+		    		paramsP2[i].sem1 = &p2sem;
+		    		paramsP2[i].id = (i+1);
+		    		pthread_create(&p2tid[i], NULL, process2Thread, &paramsP2[i]);
+		    	}
+		    	
+		    	for(int i=0;i<47;i++){
+				pthread_join(p2tid[i], NULL);
+			}
+		    	
 		    	sem_wait(semafor3);
+		    	
 		    	if(fork() == 0){
 		    		info(BEGIN, 4, 0);
 		    		
 		    		if(fork() == 0){
 		    			info(BEGIN, 5, 0);
 		    			
+		    			pthread_t p5tid[4];
+		    			
+		    			TH_STRUCT params[4];
+		    			
+		    			sem_t psem3;
+		    			sem_init(&psem3, 0, 0);
+		    			
+		    			sem_t psem4;
+		    			sem_init(&psem4, 0, 0);
+		    			
 		    			sem_post(semafor6);
+		    			
+		    			sem_wait(sem75);
+		    			
+		    			for(int i=0;i<4;i++){
+		    				params[i].sem1 = &psem3;
+		    				params[i].sem2 = &psem4;
+		    				params[i].id = (i+1);
+		    				pthread_create(&p5tid[i], NULL, process5Thread, &params[i]); 
+		    			}
+		    			
 		    			
 		    			if(fork() == 0){
 		    				sem_wait(semafor8);
@@ -43,6 +146,11 @@ int main(){
 		    				sem_post(semafor9);
 		    			}else{
 			    			sem_wait(semafor9);
+			    			
+			    			for(int i=0;i<4;i++){
+			    				pthread_join(p5tid[i], NULL);
+			    			}
+			    			
 			    			info(END, 5, 0);
 			    			sem_post(semafor5);
 			    		}
@@ -53,6 +161,17 @@ int main(){
 		    				
 		    				if(fork() == 0){
 		    					info(BEGIN, 7, 0);
+		    					
+		    					pthread_t p7tid[5];
+		    					
+		    					for(int i=0;i<5;i++){
+		    						pthread_create(&p7tid[i], NULL, process7Thread, (void*)(long)(i+1));
+		    					}
+		    					
+		    					for(int i=0;i<5;i++){
+		    						pthread_join(p7tid[i], NULL);
+		    					}
+		    					
 		    					info(END, 7, 0);
 		    					sem_post(semafor7);
 		    					sem_post(semafor7);
