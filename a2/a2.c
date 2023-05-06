@@ -15,6 +15,9 @@ typedef struct{
 
 sem_t* sem75 = NULL;
 sem_t* sem75_2 = NULL;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t cond14 = PTHREAD_COND_INITIALIZER;
 
 void* process5Thread(void* unused){
 	TH_STRUCT* data = (TH_STRUCT*)unused;
@@ -44,12 +47,39 @@ void* process5Thread(void* unused){
 	return NULL;
 }
 
+int nrOfThreadsLeft = 47;
+int nrOfCurrentThreads = 0;
+
 void* process2Thread(void* unused){
 	TH_STRUCT* data = (TH_STRUCT*)unused;
+	
 	sem_wait(data->sem1);
 	info(BEGIN, 2, data->id);
+	nrOfCurrentThreads++;
+	
+	
+	pthread_mutex_lock(&lock);
+	if(data->id == 14){
+		if(nrOfThreadsLeft != 4){
+			pthread_cond_wait(&cond14, &lock);
+		}
+	}else if(nrOfThreadsLeft == 4){
+		if(nrOfCurrentThreads == 4){
+			pthread_cond_signal(&cond14);
+		}
+
+		pthread_cond_wait(&cond, &lock);
+	}
+	nrOfThreadsLeft--;
 	info(END, 2, data->id);
+	nrOfCurrentThreads--;
+	if(data->id == 14){
+		pthread_cond_broadcast(&cond);
+	}
+	pthread_mutex_unlock(&lock);
+	
 	sem_post(data->sem1);
+	
 	return NULL;
 }
 
@@ -154,6 +184,8 @@ int main(){
 			    			info(END, 5, 0);
 			    			sem_post(semafor5);
 			    		}
+			    		sem_close(&psem3);
+			    		sem_close(&psem4);
 		    		}else{
 		    			if(fork() == 0){
 		    				sem_wait(semafor6);
@@ -199,6 +231,7 @@ int main(){
 			    	info(END, 2, 0);
 			    	sem_post(semafor1);
 			}
+			sem_close(&p2sem);
 	    	}
     	}
     	else{
@@ -213,5 +246,21 @@ int main(){
 	    		info(END, 1, 0);
 	    	}
     	}
+    	
+    	sem_unlink("/a2SEM1");
+    	sem_unlink("/a2SEM2");
+    	sem_unlink("/a2SEM3");
+    	sem_unlink("/a2SEM4");
+    	sem_unlink("/a2SEM5");
+    	sem_unlink("/a2SEM6");
+    	sem_unlink("/a2SEM7");
+    	sem_unlink("/a2SEM8");
+    	sem_unlink("/a2SEM9");
+    	sem_unlink("/a2SEM75");
+    	sem_unlink("/a2SEM75_2");
+    	
+    	pthread_mutex_destroy(&lock);
+    	pthread_cond_destroy(&cond);
+    	
     return 0;
 }
