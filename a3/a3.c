@@ -203,8 +203,55 @@ int main(){
 			    unsigned int logical_offset, no_of_bytes;
 			    readIntPipe(fdR, &logical_offset);
 			    readIntPipe(fdR, &no_of_bytes);
+			    unsigned short header_size = 0;
+			    header_size = filePoz[fileSize - 3] & 0xFF;
+			    header_size = (header_size * 256) + (filePoz[fileSize - 4] & 0xFF);
+			    char no_of_sections;
+			    no_of_sections = filePoz[fileSize - header_size + 4] & 0xFF;
+			    int section_size;
+			    unsigned int section_offset;
+			    char* readContent = NULL;
+			    readContent = (char*)malloc((no_of_bytes + 1) * sizeof(char));
+			    int necPage = (logical_offset/3072) + 1;
+			    int pozInPage = (logical_offset%3072);
+			    printf("%d - %d\n", necPage, pozInPage);
+			    int currPage = 0;
+			    for(int i=0;i<no_of_sections;i++){
+			    	section_size = filePoz[fileSize - header_size + 5 + 
+			    	(i * 27) + 26] & 0xFF;
+			    	section_size = (section_size << 8) + (filePoz[fileSize - 
+				    header_size + 5 + (i * 27) + 25] & 0xFF);
+				    section_size = (section_size << 8) + (filePoz[fileSize - 
+				    header_size + 5 + (i * 27) + 24] & 0xFF);
+				    section_size = (section_size << 8) + (filePoz[fileSize - 
+				    header_size + 5 + (i * 27) + 23] & 0xFF);
+				    section_offset = filePoz[fileSize - header_size + 5 + 
+			    	(i * 27) + 22] & 0xFF;
+			    	section_offset = (section_offset << 8) + (filePoz[fileSize - 
+				    header_size + 5 + (i * 27) + 21] & 0xFF);
+				    section_offset = (section_offset << 8) + (filePoz[fileSize - 
+				    header_size + 5 + (i * 27) + 20] & 0xFF);
+				    section_offset = (section_offset << 8) + (filePoz[fileSize - 
+				    header_size + 5 + (i * 27) + 19] & 0xFF);
+				    printf("Section %d size %d offset %d\n", i+1, section_size, section_offset);
+				    while(section_size > 0){
+				    	currPage++;
+				    	if(currPage == necPage){
+				    		for(int poz=0;poz<no_of_bytes;poz++)
+				    			readContent[poz] = filePoz[section_offset + pozInPage + poz];
+				    		printf("%s\n", readContent);
+				    		goto exit;
+				    	}
+				    	section_size -= 3072;
+				    }
+			    }
+			    exit: {}
+			    for(int i=0;i<no_of_bytes;i++){
+			    	data[i] = readContent[i];
+			    }
 				write(fdW, STR_AND_LEN("READ_FROM_LOGICAL_SPACE_OFFSET$"));
-				write(fdW, STR_AND_LEN("ERROR$"));
+				write(fdW, STR_AND_LEN("SUCCESS$"));
+				free(readContent);
 				break;
 			}
 			case 8:{
